@@ -2,11 +2,13 @@ PATH
   remote: .
   specs:
     rutorrent (0.1.0)
+      bencode (~> 0.8.2)
 
 GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.2)
+    bencode (0.8.2)
     diff-lcs (1.5.1)
     json (2.7.2)
     language_server-protocol (3.17.0.3)
