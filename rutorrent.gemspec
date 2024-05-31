@@ -36,7 +36,12 @@ Gem::Specification.new do |spec|
 
   # Uncomment to register a new dependency of your gem
   spec.add_dependency "bencode", "~> 0.8.2"
+  spec.add_dependency "bytesize", "~> 0.1.0"
+  spec.add_dependency "concurrent-ruby", "~> 1.2"
+  spec.add_dependency "pry", "~> 0.14.1"
+  spec.add_dependency "tty-prompt", "~> 0.23.1"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
+  spec.metadata["rubygems_mfa_required"] = "true"
 end

@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "rutorrent/version"
+Dir["#{__dir__}/rutorrent/**/*.rb"].each { |f| require f }
 
 module Rutorrent
   class Error < StandardError; end
-  # Your code goes here...
 end

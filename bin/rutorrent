@@ -1,3 +1,5 @@
 #!/usr/bin/env ruby
-require 'rutorrent'
-puts Rutorrent::VERSION
+
+require "rutorrent"
+
+Rutorrent::CLI.start
