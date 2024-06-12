@@ -3,7 +3,7 @@ require "concurrent-ruby"
 module Rutorrent
   class PeerConnection
     attr_reader :peers, :info_hash, :peer_id, :torrent_files, :file_savers, :interval, :downloaded_pieces,
-                :pool, :torrent_info, :piece_length, :total_pieces, :pieces_hashes, :download_complete
+                :pool, :torrent_info, :piece_length, :total_pieces, :pieces_hashes, :download_complete, :left
 
     def initialize(peers, torrent_info, interval)
       @peers = peers
@@ -33,13 +33,12 @@ module Rutorrent
 
     def start_connection(socket)
       perform_handshake(socket)
-      message_code_class = MessageCodeHandler.new(socket, file_savers, downloaded_pieces, download_complete)
-
+      message_code_class = MessageCodeHandler.new(socket, file_savers, downloaded_pieces, download_complete,
+                                                  piece_length)
       loop do
         message = MessageReader.read_message(socket)
         message_code = Constants::PEER_MESSAGES_MAPPING[message[0]]
         message_code_class.send("handle_#{message_code}", message[1])
-        report_progress
       end
     end
 
@@ -53,7 +52,7 @@ module Rutorrent
     def initialize_file_savers
       torrent_files.each_with_index.map do |torrent_file, _index|
         file_path = "#{Dir.home}/Downloads/#{torrent_file}"
-        FileSaver.new(file_path, piece_length, total_pieces, pieces_hashes)
+        FileSaver.new(file_path, piece_length, total_pieces, pieces_hashes, left)
       end
     end
 
@@ -61,8 +60,6 @@ module Rutorrent
       puts "Connecting to peer #{peer.ip}:#{peer.port}"
       socket = TCPSocket.new(peer.ip, peer.port)
       start_connection(socket)
-    rescue IO::ECONNREFUSED => e
-      puts "Failed to connect to peer #{peer.ip}:#{peer.port} - #{e.message}"
     rescue StandardError => e
       puts "Something went wrong: #{e}"
     ensure
@@ -81,15 +78,6 @@ module Rutorrent
       raise "Info hash mismatch" if received_info_hash != info_hash
 
       puts "Connected to peer: #{received_peer_id.unpack1("H*")}"
-      response
-    end
-
-    def report_progress
-      puts "Download progress: #{downloaded_pieces.size} pieces downloaded."
-      return unless downloaded_pieces.size + 1 == @file_savers.sum(&:total_pieces)
-
-      puts "Download complete!"
-      download_complete.make_true
     end
 
     def handshake
@@ -100,6 +88,7 @@ module Rutorrent
       @piece_length = torrent["info"]["piece length"]
       @pieces_hashes = torrent["info"]["pieces"].scan(/.{20}/m)
       @total_pieces = @pieces_hashes.size
+      @left = torrent["info"]["length"]
     end
   end
 end

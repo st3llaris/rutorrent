@@ -12,7 +12,7 @@ module Rutorrent
       torrent_files = prompt.multi_select(Rutorrent::MESSAGES[:instructions],
                                           format_torrent_files_with_size(decoded_torrent))
 
-      torrent_files = format_torrent_files_with_size(decoded_torrent, show_byte_size: false) if torrent_files.empty?
+      torrent_files = format_torrent_files_with_size(decoded_torrent, show_byte_size: false)
 
       Rutorrent::Downloader.new(decoded_torrent, torrent_files).start
     end
@@ -31,6 +31,8 @@ module Rutorrent
           index = torrent["info"]["files"].find_index { |f| f["path"].join("/") == file }
           "#{file} (#{ByteSize.new(torrent["info"]["files"][index]["length"])})"
         end
+      else
+        formatted_files
       end
 
       formatted_files

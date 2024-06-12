@@ -1,16 +1,18 @@
 module Rutorrent
   class MessageCodeHandler
-    attr_accessor :socket, :file_savers, :downloaded_pieces, :requested_pieces, :piece_availability, :mutex,
-                  :download_complete
+    attr_accessor :socket, :file_savers, :downloaded_pieces, :requested_pieces, :mutex,
+                  :download_complete, :piece_length
 
-    def initialize(socket, file_savers, downloaded_pieces, download_complete)
+    def initialize(socket, file_savers, downloaded_pieces, download_complete, piece_length)
       @socket = socket
       @file_savers = file_savers
       @downloaded_pieces = downloaded_pieces
       @requested_pieces = Set.new
-      @piece_availability = Hash.new { |hash, key| hash[key] = 0 }
       @mutex = Mutex.new
       @download_complete = download_complete
+      @piece_length = piece_length
+      @received_pieces = []
+      @pieces = []
     end
 
     def handle_choke(_payload)
@@ -21,7 +23,7 @@ module Rutorrent
 
     def handle_unchoke(_payload)
       puts "Received unchoked"
-      return if downloaded_pieces.size + 1 == file_savers.sum(&:total_pieces)
+      return if file_savers.all?(&:downloaded)
 
       handle_request(nil, sending: true)
     end
@@ -59,28 +61,24 @@ module Rutorrent
     def handle_request(_payload, sending: false)
       if sending
         puts "Sending requests"
-        @available_pieces.each do |_available_piece|
-          request_info = next_request_piece
-          break unless request_info
-
-          piece_index = request_info[:piece_index]
-          next if requested_pieces.include?(piece_index)
-
-          begin_offset = request_info[:begin_offset]
-          request_length = request_info[:request_length]
-
+        @request_length = 16_384
+        @available_pieces.each_with_index do |_available_piece, i|
+          @offset = 0
+          piece_index = i
           length_prefix = [13].pack("N")
           message_id = [6].pack("C")
-          payload = [piece_index, begin_offset, request_length].pack("N*")
-          packet = length_prefix + message_id + payload
 
-          socket.send(packet, 0)
-          requested_pieces.add(piece_index)
-          puts "Requested piece #{piece_index} from offset #{begin_offset} with length #{request_length}"
-          if download_complete.true?
-            puts "download completed"
-            return
+          until @offset >= @piece_length
+            payload = [piece_index, @offset, @request_length].pack("N*")
+            packet = length_prefix + message_id + payload
+
+            socket.send(packet, 0)
+
+            puts "Requested piece #{piece_index} from offset #{@offset}"
+            @offset += @request_length
           end
+
+          requested_pieces.add(piece_index)
         end
       else
         puts "Received request"
@@ -91,33 +89,25 @@ module Rutorrent
       puts "Received piece"
       piece_index, begin_offset = payload.unpack("N2")
       block_data = payload[8..]
+      existing_piece = @received_pieces.find { |piece| piece_index == piece&.piece_index }
+      if existing_piece
+        existing_piece.blocks = { begin_offset: begin_offset,
+                                  block_data: block_data }
+      else
+        @received_pieces << Piece.new([{ begin_offset: begin_offset, block_data: block_data }], piece_index)
+      end
 
       file_savers.each do |file_saver|
-        file_saver.save_block(piece_index, begin_offset, block_data)
+        file_saver.save_block(piece_index, begin_offset, block_data, @received_pieces)
       end
 
       mutex.synchronize do
         downloaded_pieces.add(piece_index)
-        requested_pieces.delete(piece_index)
       end
-
-      return if downloaded_pieces.size + 1 == file_savers.sum(&:total_pieces)
-
-      handle_request(nil, sending: true)
     end
 
     def handle_cancel(payload)
       puts "Received cancel: #{payload.unpack1("B*")}"
-    end
-
-    def next_request_piece
-      piece_index = @available_pieces.find { |index| !requested_pieces.include?(index) }
-      return nil unless piece_index
-
-      begin_offset = 0
-      request_length = 16_384
-
-      { piece_index: piece_index, begin_offset: begin_offset, request_length: request_length }
     end
   end
 end

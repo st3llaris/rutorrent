@@ -13,6 +13,7 @@ module Rutorrent
       if torrent["announce-list"][2][0].include?("udp")
         return UDPConnection.new(torrent, torrent_files, options).connect
       end
+
       if torrent["announce"].include?("http")
         HTTPConnection.new(torrent, torrent_files, options).connect
 
@@ -28,10 +29,19 @@ module Rutorrent
         port: 6881,
         uploaded: 0,
         downloaded: 0,
-        left: torrent["info"]["length"],
+        left: torrent["info"]["length"] || left,
         compact: 1,
         event: 2
       }
+    end
+
+    def left
+      length = []
+      torrent_files.map do |torrent_file|
+        length << torrent["info"]["files"].find { |file| file["path"][0] == torrent_file }["length"]
+      end
+
+      length.sum
     end
   end
 end
