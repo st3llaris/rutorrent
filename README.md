@@ -1,6 +1,6 @@
 # Rutorrent
 
-A Ruby torrent client made using concurrent-ruby for your CLI. Still in development.
+[WORK IN PROGRESS] A Ruby torrent client made using concurrent-ruby for your CLI. Still in development.
 
 ## Installation
 
